@@ -3,6 +3,7 @@
 
 # Private working notes for Claude Code (the public method lives in README.md)
 CLAUDE.md
+POSIBLES_PREGUNTAS.md
 
 # Secrets and Python environments
 .env
@@ -16,4 +17,5 @@ data/prices/
 __pycache__/
 *.pyc
 .pytest_cache/
+*.egg-info/
 results/cache/

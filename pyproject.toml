@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ipo-study"
+version = "0.1.0"
+description = "Do hyped IPOs beat the market if you buy the first trade? An event study of US IPOs since 2010"
+requires-python = ">=3.12"
+# Pinned dependencies live in requirements.txt.
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
