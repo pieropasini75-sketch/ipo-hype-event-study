@@ -50,13 +50,14 @@ def plot_abnormal_curve(panel, n_star: int, benchmark_name: str, path: Path) -> 
         ax.set_title(title, color=TEXT, fontsize=11, loc="left")
         ax.set_xlabel("Trading days held (N)", color=MUTED)
         ax.set_xlim(0, 22)
+        ax.set_xticks(range(0, 21, 5))  # N is a whole number of days
         ax.grid(axis="y", color=GRID, linewidth=0.8)
         ax.tick_params(colors=MUTED)
         for side in ["top", "right"]:
             ax.spines[side].set_visible(False)
         for side in ["left", "bottom"]:
             ax.spines[side].set_color(GRID)
-        ax.legend(frameon=False, fontsize=9, labelcolor=TEXT, loc="lower left")
+        ax.legend(frameon=False, fontsize=9, labelcolor=TEXT, loc="upper right")
     axes[0].set_ylabel(f"Mean abnormal return vs {benchmark_name} (%)", color=MUTED)
     fig.suptitle("Buy at the first trade, sell at the day-N close (after 0.2% costs)",
                  color=TEXT, fontsize=12, x=0.01, ha="left")
