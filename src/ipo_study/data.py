@@ -147,6 +147,17 @@ def adjusted_offer_price(offer_price: float, splits: pd.Series, ipo_date) -> flo
     return offer_price / split_factor_after(splits, ipo_date)
 
 
+def drop_non_trading_bars(prices: pd.DataFrame) -> pd.DataFrame:
+    """Remove bars with zero (or missing) volume: nobody traded, so there is no real price.
+
+    Yahoo sometimes adds a placeholder bar on the pricing day with every price
+    equal to the offer price and volume 0 (Shopify, 2015-05-20). Left in, it
+    looks like a reused ticker or, worse, becomes day 0 and makes the offer
+    price the entry price.
+    """
+    return prices[prices["Volume"] > 0]  # NaN > 0 is False, so missing volume is dropped too
+
+
 def has_prices_before(prices: pd.DataFrame, ipo_date) -> bool:
     """True if Yahoo has bars before the IPO date: the ticker was reused or the date is wrong."""
     return bool((prices.index < pd.Timestamp(ipo_date)).any())
@@ -161,6 +172,7 @@ def load_all_ipos(ipos: pd.DataFrame, cache_dir: Path = PRICES_DIR,
         prices, splits = get_ticker_data(row.ticker, start, end, cache_dir, refresh)
         if prices.empty:
             continue  # get_ticker_data already warned
+        prices = drop_non_trading_bars(prices)
         if has_prices_before(prices, row.ipo_date):
             warnings.warn(f"{row.ticker}: prices exist before the IPO date "
                           f"{row.ipo_date.date()}; wrong ticker or date, dropped")

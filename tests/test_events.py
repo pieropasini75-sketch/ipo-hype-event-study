@@ -10,6 +10,7 @@ from ipo_study.events import (
     day0_range,
     event_returns,
     find_day0,
+    missed_trading_days,
 )
 
 
@@ -68,3 +69,18 @@ def test_day0_range():
 
 def test_flat_prices_have_zero_volatility():
     assert annualized_volatility(pd.Series([10.0] * 11)) == 0.0
+
+
+def test_missing_first_day_is_detected():
+    # Klarna-like: the market traded on the IPO date, but our first bar is a day later.
+    market = pd.to_datetime(["2025-09-09", "2025-09-10", "2025-09-11"])
+    missed = missed_trading_days(market, "2025-09-10", pd.Timestamp("2025-09-11"))
+    assert list(missed) == [pd.Timestamp("2025-09-10")]
+
+
+def test_weekend_ipo_date_is_not_a_missing_day():
+    # IPO date is a Saturday; the market did not trade until Monday, so nothing is missing.
+    market = pd.to_datetime(["2020-01-03", "2020-01-06"])
+    missed = missed_trading_days(market, "2020-01-04", pd.Timestamp("2020-01-06"))
+    assert len(missed) == 0
+

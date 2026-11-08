@@ -8,6 +8,7 @@ import pytest
 import ipo_study.data as data
 from ipo_study.data import (
     adjusted_offer_price,
+    drop_non_trading_bars,
     has_prices_before,
     load_ipos,
     split_factor_after,
@@ -81,3 +82,12 @@ def test_get_ticker_data_reads_cache_without_network(tmp_path, monkeypatch):
     assert splits.tolist() == [2.0]
 
 
+def test_zero_volume_placeholder_is_dropped():
+    # Shopify-like: a fake bar at the offer price on the pricing day, volume 0.
+    prices = pd.DataFrame(
+        {"Open": [1.70, 2.80], "Volume": [0, 123_039_000]},
+        index=pd.to_datetime(["2015-05-20", "2015-05-21"]),
+    )
+    cleaned = drop_non_trading_bars(prices)
+    assert list(cleaned.index) == [pd.Timestamp("2015-05-21")]
+    assert has_prices_before(cleaned, "2015-05-21") is False

@@ -42,6 +42,18 @@ def find_day0(prices: pd.DataFrame, ipo_date) -> pd.Timestamp:
     return day0
 
 
+def missed_trading_days(market_dates: pd.DatetimeIndex, ipo_date,
+                        day0: pd.Timestamp) -> pd.DatetimeIndex:
+    """Market trading days from the IPO date up to (not including) our day 0.
+
+    Non-empty means the data is missing the IPO's real first day(s), so our
+    "day 0" is not the first trade (Klarna: Yahoo has no bar for 2025-09-10).
+    The calendar-day check in find_day0 cannot see this when the gap is short.
+    """
+    ipo_date = pd.Timestamp(ipo_date)
+    return market_dates[(market_dates >= ipo_date) & (market_dates < day0)]
+
+
 def trading_window(prices: pd.DataFrame, day0: pd.Timestamp,
                    max_n: int = MAX_N) -> pd.DataFrame:
     """Bars for day 0 through day max_n (fewer if the data ends early).

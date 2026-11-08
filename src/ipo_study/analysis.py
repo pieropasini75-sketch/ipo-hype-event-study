@@ -14,6 +14,7 @@ Rules (fixed before looking at any results):
 from __future__ import annotations
 
 import math
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -71,8 +72,14 @@ def build_events(ipos: pd.DataFrame,
             continue
         prices, splits = ipo_data[row.ticker]
 
+        day0 = events.find_day0(prices, row.ipo_date)
+        missed = events.missed_trading_days(benchmark.index, row.ipo_date, day0)
+        if len(missed):
+            warnings.warn(f"{row.ticker}: no bar on {missed[0].date()} although the market "
+                          "traded; the first trade is missing from the data, dropped")
+            continue
+
         ev = events.event_returns(prices, benchmark, row.ipo_date)
-        day0 = ev["date"].iloc[0]
         day0_open = float(prices.loc[day0, "Open"])
 
         if row.listing_type == "direct_listing":
