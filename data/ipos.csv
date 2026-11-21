@@ -4,9 +4,9 @@ GM,General Motors,2010-11-18,33,478000000,15774000000,32,33,ipo,Original range $
 GRPN,Groupon,2011-11-04,20,35000000,700000000,16,18,ipo,
 META,Facebook (Meta Platforms),2012-05-18,38,421200000,16005600000,34,38,ipo,Original range $28-$35; Listed as FB; current ticker META
 GPRO,GoPro,2014-06-26,24,17800000,427200000,21,24,ipo,
-BABA,Alibaba Group,2014-09-19,68,320100000,21766800000,66,68,ipo,Original range $60-$66; ADS
+BABA,Alibaba Group,2014-09-19,68,320106100,21767214800,66,68,ipo,"Original range $60-$66; ADS; Shares from Nasdaq calendar (was 320,100,000)"
 W,Wayfair,2014-10-02,29,11000000,319000000,25,28,ipo,
-ETSY,Etsy,2015-04-16,16,16700000,267200000,14,16,ipo,Priced 2015-04-15; first trade 2015-04-16
+ETSY,Etsy,2015-04-16,16,16666666,266666656,14,16,ipo,"Priced 2015-04-15; first trade 2015-04-16; Shares from Nasdaq calendar (was 16,700,000)"
 SHOP,Shopify,2015-05-21,17,7700000,130900000,12,14,ipo,Priced 2015-05-20; first trade 2015-05-21
 RACE,Ferrari,2015-10-21,52,17175000,893100000,48,52,ipo,
 XYZ,Square (Block),2015-11-19,9,27000000,243000000,11,13,ipo,Listed as SQ; current ticker XYZ; priced below range
@@ -17,7 +17,7 @@ MDB,MongoDB,2017-10-19,24,8000000,192000000,20,22,ipo,Original range $18-$20
 DBX,Dropbox,2018-03-23,21,36000000,756000000,18,20,ipo,Original range $16-$18
 DOCU,DocuSign,2018-04-27,29,21700000,629300000,26,28,ipo,Original range $24-$26
 LYFT,Lyft,2019-03-29,72,32500000,2340000000,70,72,ipo,Original range $62-$68
-ZM,Zoom Video Communications,2019-04-18,36,20900000,752400000,33,35,ipo,Original range $28-$32
+ZM,Zoom Video Communications,2019-04-18,36,20869565,751304340,33,35,ipo,"Original range $28-$32; Shares from Nasdaq calendar (was 20,900,000)"
 PINS,Pinterest,2019-04-18,19,75000000,1425000000,15,17,ipo,
 BYND,Beyond Meat,2019-05-02,25,9625000,240625000,23,25,ipo,Original range $19-$21
 UBER,Uber Technologies,2019-05-10,45,180000000,8100000000,44,50,ipo,Priced 2019-05-09; first trade 2019-05-10
@@ -26,23 +26,23 @@ PTON,Peloton Interactive,2019-09-26,29,40000000,1160000000,26,29,ipo,
 SNOW,Snowflake,2020-09-16,120,28000000,3360000000,100,110,ipo,Original range $75-$85
 U,Unity Software,2020-09-18,52,25000000,1300000000,44,48,ipo,Original range $34-$42
 DASH,DoorDash,2020-12-09,102,33000000,3366000000,90,95,ipo,
-ABNB,Airbnb,2020-12-10,68,51900000,3529200000,56,60,ipo,Original range $44-$50; Sources give 51.6M / 51.9M / ~52M shares; using 51.9M - verify in 424B4
+ABNB,Airbnb,2020-12-10,68,51323531,3490000108,56,60,ipo,"Original range $44-$50; Shares from Nasdaq calendar (was 51,900,000)"
 AFRM,Affirm,2021-01-13,49,24600000,1205400000,41,44,ipo,Original range $33-$38
 BMBL,Bumble,2021-02-11,43,50000000,2150000000,37,39,ipo,Original range $28-$30
 CPNG,Coupang,2021-03-11,35,130000000,4550000000,32,34,ipo,Original range $27-$30; Upsized from 120M to 130M shares before pricing
 HOOD,Robinhood Markets,2021-07-29,38,55000000,2090000000,38,42,ipo,
 RIVN,Rivian Automotive,2021-11-10,78,153000000,11934000000,72,74,ipo,Original range $57-$62
-CAVA,CAVA Group,2023-06-15,22,14440000,317680000,19,20,ipo,Original range $17-$19
+CAVA,CAVA Group,2023-06-15,22,14444444,317777768,19,20,ipo,"Original range $17-$19; Shares from Nasdaq calendar (was 14,440,000)"
 ARM,Arm Holdings,2023-09-14,51,95500000,4870500000,47,51,ipo,ADS
 CART,Maplebear (Instacart),2023-09-19,30,22000000,660000000,28,30,ipo,Original range $26-$28
-BIRK,Birkenstock,2023-10-11,46,32260000,1483960000,44,49,ipo,
+BIRK,Birkenstock,2023-10-11,46,32258064,1483870944,44,49,ipo,"Shares from Nasdaq calendar (was 32,260,000)"
 ALAB,Astera Labs,2024-03-20,36,19800000,712800000,32,34,ipo,Original range $27-$30
 RDDT,Reddit,2024-03-21,34,22000000,748000000,31,34,ipo,15.28M company + 6.72M selling shareholders
 CRWV,CoreWeave,2025-03-28,40,37500000,1500000000,47,55,ipo,Priced below range
 CRCL,Circle Internet Group,2025-06-05,31,34000000,1054000000,27,28,ipo,Original range $24-$26
 CHYM,Chime Financial,2025-06-12,27,32000000,864000000,24,26,ipo,
-FIG,Figma,2025-07-31,33,36937000,1218921000,30,32,ipo,Original range $25-$28
-KLAR,Klarna,2025-09-10,40,34300000,1372000000,35,37,ipo,
+FIG,Figma,2025-07-31,33,36937080,1218923640,30,32,ipo,"Original range $25-$28; Shares from Nasdaq calendar (was 36,937,000)"
+KLAR,Klarna,2025-09-10,40,34311274,1372450960,35,37,ipo,"Shares from Nasdaq calendar (was 34,300,000)"
 SPCX,SpaceX,2026-06-12,135,555555555,74999999925,,,ipo,"Fixed offer price, no indicative range; greenshoe up to 83,333,333 shares; added to Nasdaq-100 2026-07-07 (inside day 0-20 window); confirm prices with yfinance"
 PLTR,Palantir,2020-09-30,,,,,,direct_listing,Exchange reference price $7.25 - not an offer price
 RBLX,Roblox,2021-03-10,,,,,,direct_listing,Exchange reference price $45.00 - not an offer price
