@@ -1,6 +1,9 @@
 # macOS
 .DS_Store
 
+# Local Claude Code workspace
+.claude/
+
 # Private working notes for Claude Code (the public method lives in README.md)
 CLAUDE.md
 POSIBLES_PREGUNTAS.md

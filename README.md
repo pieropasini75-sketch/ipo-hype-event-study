@@ -14,6 +14,9 @@ The answer counts whether it is yes or no.
 - **The positive test mean comes from one IPO.** Circle (CRCL) beat QQQ by +94% over 6 days. Without it, the other 13 hyped IPOs average −1.1%.
 - **The downside is large.** At N\* = 6, the worst hyped IPO in the test set lost 31% against QQQ, and the 10th percentile was −28.6%.
 - **The result holds against SPY.** Mean +6.1%, median −2.3%, t = 0.68. A newly listed stock moves about 7 times more than the market (10-day annualised volatility ~96% vs ~14%), so the choice of benchmark barely matters.
+- **The best N is not better than luck.** Correcting for having searched 21 holding periods (a centered bootstrap of the maximum t, Romano–Wolf style, which does not assume symmetric returns), the adjusted p-value for N\* = 6 is **0.61**.
+- **The hype label does not separate IPOs.** At N\* in the test period, a two-sided permutation test of hyped vs not-hyped gives p = 0.63.
+- **One trade is a coin flip with a fat left tail.** Among hyped test-period IPOs at N\*, 57% lost to QQQ and 21% lost more than 20%. Averaging 10 such trades (resampled) cuts the chance of a >20% relative loss to about 0.1%. That figure assumes the trades are independent, but hot IPOs arrive in waves, so the real risk is higher.
 - **The sample is too small to answer the question.** With the observed spread (standard deviation of about 33% at N = 6), detecting a true +5% edge at t ≈ 2 would take roughly 180 hyped IPOs. This version has 9 in training and 14 in test. v2 expands the sample (see [Next steps](#next-steps)).
 
 ### At N\* = 6 vs QQQ
@@ -73,8 +76,24 @@ All rules were fixed and committed **before** looking at any returns.
 
 ## Next steps
 
-- **v2: hundreds of IPOs.** Nasdaq's IPO calendar covers priced IPOs since 1997 with offer price and shares. The plan is to apply a Ritter-style filter (no SPACs, funds, ETFs, direct listings or offers under $5) and re-run with **the same rules**.
-- **Prospective case: Anthropic.** When it lists, the fixed rule (hype or not, N\*) will be applied and compared with what actually happens. It will not be added to the historical sample.
+### v2: a sample of ~2,500 IPOs (built, not yet run)
+
+The pipeline to expand the sample is in place ([`build_sample.py`](build_sample.py), [`src/ipo_study/nasdaq.py`](src/ipo_study/nasdaq.py)). The analysis has not been run on it yet.
+
+- **Source.** Nasdaq's IPO calendar, covering 4,786 priced deals from 2010-01 to 2026-06, cached as raw JSON.
+- **Validation before use.** Nasdaq was checked against the 45 hand-verified IPOs:
+  - Its `pricedDate` matched the **first trading day in 43 of 43** cases, not the pricing day. One research source had claimed the opposite. Shifting by a day would have silently made every "day 0" the second trading day.
+  - Share counts are base shares (42 of 43 within 1%).
+  - Offer prices matched in 43 of 43.
+  - The exact Nasdaq share counts replaced rounded figures for 8 IPOs in v1. No hype classification changed.
+- **Filter.** The filter keeps 2,527 IPOs, 339 of them with an offer of at least US$500M. Every excluded deal has a reason in [`data/excluded.csv`](data/excluded.csv). Nasdaq lists a merged SPAC under its target's *current* name (a SPAC unit appears as "Joby Aviation"), so names cannot identify SPACs. The filter relies on unit tickers instead, plus the $10.00 SPAC price from 2019 on.
+- **Survivorship is the main obstacle.** Partway through the price download (1,800 of 2,530 IPOs), about 60% had no Yahoo data, close to 75% for 2010–2012 IPOs. A full v2 should use survivorship-free prices (CRSP via WRDS) and report coverage by year and offer size, which `run_study.py v2` already does.
+
+To finish v2: `python build_sample.py prices` (resumable), then `python run_study.py v2`. The rules stay unchanged and N\* is re-chosen on v2's training period only.
+
+### Prospective case: Anthropic
+
+When it lists, the fixed rule (hype or not, N\*) will be applied and compared with what actually happens. It will not be added to the historical sample.
 
 ## Run it
 
@@ -85,8 +104,15 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 python -m pip install -e .
-pytest                 # 24 tests, made-up prices, no network
-python run_study.py    # downloads/caches prices, writes results/
+pytest                 # 27 tests, made-up data, no network
+python run_study.py    # v1: downloads/caches prices, writes results/
+
+# v2 pipeline (expanded sample)
+python build_sample.py download   # Nasdaq IPO calendar, cached as raw JSON
+python build_sample.py validate   # compare against the 45 hand-verified IPOs
+python build_sample.py filter     # write data/ipos_expanded.csv and data/excluded.csv
+python build_sample.py prices     # Yahoo prices for the expanded sample (resumable)
+python run_study.py v2            # results/v2/
 ```
 
 ```
@@ -94,6 +120,8 @@ data/ipos.csv            IPO list: dates, offer price, base shares, offer size, 
 src/ipo_study/data.py    download and cache prices and splits; data-quality checks
 src/ipo_study/events.py  day 0, event window, returns, abnormal returns, volatility
 src/ipo_study/analysis.py  hype rule, train/test split, statistics, choice of N*
+src/ipo_study/nasdaq.py  download, cache and parse Nasdaq's IPO calendar (v2)
+build_sample.py          builds and validates the expanded v2 sample
 run_study.py             runs everything and writes tables and charts to results/
 tests/                   unit tests with made-up prices
 ```

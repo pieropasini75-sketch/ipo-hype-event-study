@@ -1,0 +1,19 @@
+# Keep the image small and free of local or private files.
+.git
+.venv/
+venv/
+.claude/
+.DS_Store
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Caches and outputs: mounted as volumes at run time, not baked into the image
+data/prices/
+data/nasdaq_raw/
+results/
+
+# Private notes
+CLAUDE.md
+POSIBLES_PREGUNTAS.md
