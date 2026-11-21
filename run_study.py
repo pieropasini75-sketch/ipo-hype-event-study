@@ -113,9 +113,47 @@ def report_robustness(benchmark, ipos, ipo_data, n_star: int) -> None:
     print(risk.round(3).to_string(index=False), "\n")
 
 
-def main() -> None:
-    RESULTS_DIR.mkdir(exist_ok=True)
-    ipos = data.load_ipos()
+def report_coverage(ipos, ipo_data, ipo_table) -> None:
+    """How many IPOs were lost and why, by year and by offer size (survivorship bias)."""
+    status = pd.Series("used", index=ipos["ticker"])
+    status[~status.index.isin(ipo_data)] = "no Yahoo data"
+    status[status.index.isin(ipo_data) & ~status.index.isin(ipo_table["ticker"])] = "failed data checks"
+    out = ipos.assign(
+        status=ipos["ticker"].map(status),
+        year=ipos["ipo_date"].dt.year,
+        size_class=(ipos["offer_size_usd"] >= analysis.HYPE_MIN_OFFER_SIZE_USD).map(
+            {True: ">= US$500M", False: "< US$500M"}),
+    )
+    by_year = pd.crosstab(out["year"], out["status"])
+    by_year["share_lost"] = 1 - by_year.get("used", 0) / by_year.sum(axis=1)
+    by_size = pd.crosstab(out["size_class"], out["status"], normalize="index")
+    by_year.to_csv(RESULTS_DIR / "coverage_by_year.csv")
+    by_size.to_csv(RESULTS_DIR / "coverage_by_size.csv")
+    print("Coverage (survivorship bias) by offer size:")
+    print(by_size.round(3).to_string(), "\n")
+
+
+def report_without_foreign(benchmark, ipos, ipo_data, n_star: int) -> None:
+    """Robustness: the same N* on US issuers only (likely foreign issuers removed)."""
+    domestic = ipos[~ipos["likely_foreign"]]
+    panel, _ = analysis.build_events(domestic, ipo_data, benchmark)
+    table = analysis.at_n(analysis.summary_table(panel), n_star)
+    table.to_csv(RESULTS_DIR / "headline_qqq_domestic.csv")
+    print(f"--- At N* = {n_star}, vs QQQ, without likely foreign issuers ---")
+    print(table.round(4).to_string(), "\n")
+
+
+SAMPLES = {
+    "v1": (data.IPOS_CSV, RESULTS_DIR),
+    "v2": (data.PROJECT_ROOT / "data" / "ipos_expanded.csv", RESULTS_DIR / "v2"),
+}
+
+
+def main(sample: str = "v1") -> None:
+    global RESULTS_DIR
+    ipos_path, RESULTS_DIR = SAMPLES[sample]
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    ipos = data.load_ipos(ipos_path)
     ipo_data = data.load_all_ipos(ipos)
     benchmarks = data.load_benchmarks(ipos)
     print(f"{len(ipo_data)} of {len(ipos)} IPOs have usable prices")
@@ -128,8 +166,14 @@ def main() -> None:
     for name, table in [("QQQ", qqq_table), ("SPY", spy_table)]:
         print(f"--- At N* = {n_star}, vs {name} ---")
         print(analysis.at_n(table, n_star).round(4).to_string(), "\n")
+    if "likely_foreign" in ipos:
+        _, ipo_table = analysis.build_events(ipos, ipo_data, benchmarks["QQQ"])
+        report_coverage(ipos, ipo_data, ipo_table)
+        report_without_foreign(benchmarks["QQQ"], ipos, ipo_data, n_star)
     print(f"Tables and charts written to {RESULTS_DIR}")
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    main(sys.argv[1] if len(sys.argv) > 1 else "v1")

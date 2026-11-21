@@ -8,6 +8,7 @@ not depend on Yahoo being available (or silently changing its data).
 from __future__ import annotations
 
 import sys
+import time
 import warnings
 from datetime import date, timedelta
 from pathlib import Path
@@ -18,6 +19,8 @@ import yfinance as yf
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 IPOS_CSV = PROJECT_ROOT / "data" / "ipos.csv"
 PRICES_DIR = PROJECT_ROOT / "data" / "prices"
+NO_YAHOO_CSV = PROJECT_ROOT / "data" / "no_yahoo_data.csv"  # tickers Yahoo does not have
+DOWNLOAD_PAUSE_SECONDS = 0.5  # pause after each real download so Yahoo is not flooded
 
 DAYS_BEFORE = 7  # calendar days before the IPO date; any bar here means a wrong ticker or date
 DAYS_AFTER = 90  # calendar days after the IPO date; comfortably covers 20 trading days
@@ -113,6 +116,7 @@ def get_ticker_data(ticker: str, start: date, end: date,
         return prices, splits
 
     prices, splits = _download(ticker, start, end)
+    time.sleep(DOWNLOAD_PAUSE_SECONDS)
     if prices.empty:
         # Not cached, so a temporary network failure is retried on the next run.
         warnings.warn(f"{ticker}: Yahoo returned no prices for {start}..{end} "
@@ -167,7 +171,10 @@ def load_all_ipos(ipos: pd.DataFrame, cache_dir: Path = PRICES_DIR,
                   refresh: bool = False) -> dict[str, tuple[pd.DataFrame, pd.Series]]:
     """Prices and splits for every IPO, dropping (with a warning) the ones that fail checks."""
     out = {}
+    skip = set(pd.read_csv(NO_YAHOO_CSV)["ticker"]) if NO_YAHOO_CSV.exists() else set()
     for row in ipos.itertuples(index=False):
+        if row.ticker in skip:
+            continue  # known to have no Yahoo data; counted as survivorship bias
         start, end = event_window(row.ipo_date)
         prices, splits = get_ticker_data(row.ticker, start, end, cache_dir, refresh)
         if prices.empty:
