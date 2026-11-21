@@ -164,3 +164,102 @@ def choose_best_n(table: pd.DataFrame, group: str = "hype", period: str = "train
 def at_n(table: pd.DataFrame, n: int) -> pd.DataFrame:
     """The rows of the summary table for one holding period, one per group and period."""
     return table[table["N"] == n].set_index(["group", "period"]).drop(columns="N")
+
+
+# --- Multiple testing: centered bootstrap of the max t (Romano-Wolf) ----------
+
+def curves(panel: pd.DataFrame, group: str, period: str,
+           column: str = "abnormal_return") -> pd.DataFrame:
+    """One row per IPO, one column per N: each IPO's whole curve from day 0 to 20."""
+    sub = panel[(panel["group"] == group) & (panel["period"] == period)]
+    return sub.pivot(index="ticker", columns="N", values=column)
+
+
+def t_by_column(x: np.ndarray) -> np.ndarray:
+    """One-sample t-statistic against 0 for every column, ignoring missing values."""
+    n = np.sum(~np.isnan(x), axis=0)
+    mean = np.nanmean(x, axis=0)
+    sd = np.nanstd(x, axis=0, ddof=1)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return mean / (sd / np.sqrt(n))
+
+
+def max_t_bootstrap(curve_table: pd.DataFrame, n_resamples: int = BOOTSTRAP_RESAMPLES,
+                    seed: int = BOOTSTRAP_SEED) -> dict:
+    """p-value for the best N that accounts for having searched over every N.
+
+    Whole curves are resampled (so the correlation between N is kept) and the
+    observed mean curve is subtracted, which makes "true mean is 0 at every N"
+    hold by construction. Unlike sign-flipping, this does not assume the
+    returns are symmetric, which IPO returns are not.
+    """
+    x = curve_table.to_numpy(dtype=float)
+    observed = float(np.nanmax(t_by_column(x)))
+    centered = x - np.nanmean(x, axis=0)
+    rng = np.random.default_rng(seed)
+    n_ipos = len(x)
+    exceed = 0
+    for _ in range(n_resamples):
+        sample = centered[rng.integers(0, n_ipos, size=n_ipos)]
+        if np.nanmax(t_by_column(sample)) >= observed:
+            exceed += 1
+    return {"max_t": observed, "p_adjusted": (1 + exceed) / (1 + n_resamples)}
+
+
+def label_permutation_test(hype: pd.Series, no_hype: pd.Series,
+                           n_resamples: int = BOOTSTRAP_RESAMPLES,
+                           seed: int = BOOTSTRAP_SEED) -> dict:
+    """Two-sided test of whether the hype label separates abnormal returns.
+
+    If the label meant nothing, shuffling it would give differences in means
+    as large as the observed one quite often.
+    """
+    a, b = hype.dropna().to_numpy(float), no_hype.dropna().to_numpy(float)
+    observed = a.mean() - b.mean()
+    pooled = np.concatenate([a, b])
+    rng = np.random.default_rng(seed)
+    exceed = 0
+    for _ in range(n_resamples):
+        shuffled = rng.permutation(pooled)
+        diff = shuffled[: len(a)].mean() - shuffled[len(a):].mean()
+        if abs(diff) >= abs(observed):
+            exceed += 1
+    return {"diff_in_means": float(observed), "p_value": (1 + exceed) / (1 + n_resamples)}
+
+
+# --- Risk for an investor -----------------------------------------------------
+
+LOSS_THRESHOLD = -0.20
+PORTFOLIO_SIZES = (3, 5, 10)
+
+
+def risk_profile(returns) -> dict:
+    """Share losing, share losing more than 20%, median and the 5th/10th percentiles."""
+    x = np.asarray(returns, dtype=float)
+    x = x[~np.isnan(x)]
+    return {
+        "n": len(x),
+        "share_losing": float((x < 0).mean()),
+        "share_losing_20pct": float((x < LOSS_THRESHOLD).mean()),
+        "median": float(np.median(x)),
+        "p5": float(np.percentile(x, 5)),
+        "p10": float(np.percentile(x, 10)),
+    }
+
+
+def single_trade_risk(returns: pd.Series) -> dict:
+    """Risk of one trade: direct proportions from the data, no simulation needed."""
+    return risk_profile(returns)
+
+
+def average_of_k_risk(returns: pd.Series, ks=PORTFOLIO_SIZES,
+                      n_resamples: int = BOOTSTRAP_RESAMPLES,
+                      seed: int = BOOTSTRAP_SEED) -> pd.DataFrame:
+    """Monte Carlo: risk of averaging k trades drawn with replacement from real returns."""
+    x = returns.dropna().to_numpy(float)
+    rng = np.random.default_rng(seed)
+    rows = []
+    for k in ks:
+        averages = rng.choice(x, size=(n_resamples, k), replace=True).mean(axis=1)
+        rows.append({"k": k, **risk_profile(averages)})
+    return pd.DataFrame(rows).drop(columns="n")

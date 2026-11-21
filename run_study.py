@@ -93,6 +93,7 @@ def main() -> None:
     _, spy_table = run_benchmark("SPY", benchmarks["SPY"], ipos, ipo_data, n_star=n_star)
 
     print(f"\nN* (highest t-stat, hyped IPOs, train, vs QQQ) = {n_star}\n")
+    report_robustness(benchmarks["QQQ"], ipos, ipo_data, n_star)
     for name, table in [("QQQ", qqq_table), ("SPY", spy_table)]:
         print(f"--- At N* = {n_star}, vs {name} ---")
         print(analysis.at_n(table, n_star).round(4).to_string(), "\n")
