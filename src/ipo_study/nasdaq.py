@@ -7,7 +7,9 @@ JSON in data/nasdaq_raw/ so the sample can always be rebuilt without the network
 
 from __future__ import annotations
 
+import html
 import json
+import re
 import time
 import urllib.request
 from pathlib import Path
@@ -57,10 +59,19 @@ def fetch_month(year: int, month: int, raw_dir: Path = RAW_DIR) -> dict:
 
 
 def _number(text) -> float:
-    """'$1,425,000,000.00' or '13,300,000' -> float. Empty or missing -> NaN."""
+    """'$1,425,000,000.00' or '13,300,000' -> float. Empty, missing or a range -> NaN.
+
+    A few rows are malformed: stray spaces ('14 .00'), invisible HTML characters
+    ('10.00\\t&#8203;') and price *ranges* ('10.45-12.80'). The first two are
+    cleaned; a range does not tell us the final price, so it becomes NaN and the
+    filter later excludes that IPO instead of guessing.
+    """
     if text is None:
         return float("nan")
-    cleaned = str(text).replace("$", "").replace(",", "").strip()
+    text = html.unescape(str(text))
+    if "-" in text:
+        return float("nan")
+    cleaned = re.sub(r"[^0-9.]", "", text)  # keep digits and the decimal point only
     return float(cleaned) if cleaned else float("nan")
 
 

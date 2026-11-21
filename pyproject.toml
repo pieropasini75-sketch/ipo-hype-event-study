@@ -14,3 +14,4 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]  # lets tests import the scripts at the repo root (build_sample.py)

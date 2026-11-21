@@ -15,6 +15,7 @@ import matplotlib
 
 matplotlib.use("Agg")  # write files only; never open a window
 import matplotlib.pyplot as plt  # noqa: E402
+import pandas as pd  # noqa: E402
 
 from ipo_study import analysis, data  # noqa: E402
 
@@ -80,6 +81,36 @@ def run_benchmark(benchmark_name, benchmark, ipos, ipo_data, n_star=None):
     analysis.at_n(table, n_star).to_csv(RESULTS_DIR / f"headline_{tag}.csv")
     plot_abnormal_curve(panel, n_star, benchmark_name, RESULTS_DIR / f"abnormal_curve_{tag}.png")
     return n_star, table
+
+
+def report_robustness(benchmark, ipos, ipo_data, n_star: int) -> None:
+    """Multiple-testing correction, hype-label test and investor risk (vs QQQ)."""
+    panel, _ = analysis.build_events(ipos, ipo_data, benchmark)
+
+    # 1. Is the best N in training better than luck, given that 21 N were searched?
+    mt = analysis.max_t_bootstrap(analysis.curves(panel, "hype", "train"))
+    # 2. In the test period, does the hype label separate IPOs at N*?
+    at = panel[(panel["N"] == n_star) & (panel["period"] == "test")]
+    label = analysis.label_permutation_test(
+        at.loc[at["group"] == "hype", "abnormal_return"],
+        at.loc[at["group"] == "no_hype", "abnormal_return"])
+    pd.DataFrame([{**mt, **{f"label_{k}": v for k, v in label.items()}}]).to_csv(
+        RESULTS_DIR / "multiple_testing_qqq.csv", index=False)
+    print(f"Max-t correction (train): max t = {mt['max_t']:.2f}, adjusted p = {mt['p_adjusted']:.4f}")
+    print(f"Hype label (test, N*): diff in means = {label['diff_in_means']:+.4f}, "
+          f"p = {label['p_value']:.4f}\n")
+
+    # 3. Risk of the trade we would use for Anthropic: hyped IPOs, test period, N*.
+    hyped = at[at["group"] == "hype"]
+    rows = []
+    for measure in ["abnormal_return", "ipo_return"]:
+        rows.append({"measure": measure, "k": 1, **analysis.single_trade_risk(hyped[measure])})
+        many = analysis.average_of_k_risk(hyped[measure])
+        rows += [{"measure": measure, **r} for r in many.to_dict("records")]
+    risk = pd.DataFrame(rows)
+    risk.to_csv(RESULTS_DIR / "investor_risk_qqq.csv", index=False)
+    print("Investor risk (hyped IPOs, test, N*; k = trades averaged):")
+    print(risk.round(3).to_string(index=False), "\n")
 
 
 def main() -> None:
