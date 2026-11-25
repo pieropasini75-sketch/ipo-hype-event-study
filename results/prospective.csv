@@ -1,0 +1,5 @@
+ticker,sample,benchmark,group,open_premium,offer_size_usd,status,n_star,abnormal_at_n_star,last_n,abnormal_at_last_n,percentile_in_reference,reference_n,reference_median,reference_share_beat_market
+ANT,v1,QQQ,hype,0.34337349397590367,81340000000,pending (4 of 7 days traded),6,,3,-0.21822222748979303,,14,-0.019959098865642677,0.42857142857142855
+ANT,v1,SPY,hype,0.34337349397590367,81340000000,pending (4 of 7 days traded),6,,3,-0.2420509563616542,,14,-0.022679455231356282,0.42857142857142855
+ANT,v2,QQQ,hype,0.34337349397590367,81340000000,pending (4 of 7 days traded),6,,3,-0.21822222748979303,,72,0.020018979196840758,0.5277777777777778
+ANT,v2,SPY,hype,0.34337349397590367,81340000000,pending (4 of 7 days traded),6,,3,-0.2420509563616542,,72,0.014505212505074805,0.5555555555555556

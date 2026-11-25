@@ -1,0 +1,2 @@
+ticker,company,ipo_date,offer_price,shares_offered,offer_size_usd,range_low,range_high,listing_type,notes
+ANT,Anthropic,2026-11-19,83,980000000,81340000000,70,78,ipo,"Prospective case, never part of the historical sample. Nasdaq (Global Select). Shares upsized from 825M to 980M before pricing (CNBC, CBS News); base vs greenshoe not yet checked against the 424B4. Any count above 6.03M shares passes the US$500M test."

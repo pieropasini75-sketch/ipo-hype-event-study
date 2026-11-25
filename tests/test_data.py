@@ -91,3 +91,35 @@ def test_zero_volume_placeholder_is_dropped():
     cleaned = drop_non_trading_bars(prices)
     assert list(cleaned.index) == [pd.Timestamp("2015-05-21")]
     assert has_prices_before(cleaned, "2015-05-21") is False
+
+
+def test_ticker_na_is_not_read_as_missing(tmp_path):
+    # Nano Labs trades as "NA". pandas reads that text as a missing value by
+    # default, which turned the ticker into NaN and sent "nan" to Yahoo.
+    csv = tmp_path / "ipos.csv"
+    csv.write_text("ticker,ipo_date,offer_price,shares_offered,offer_size_usd\n"
+                   "NA,2022-07-12,11.5,1770000,20355000\n"
+                   "XYZ,2022-07-12,,,\n")
+    ipos = load_ipos(csv)
+    assert ipos["ticker"].tolist() == ["NA", "XYZ"]
+    assert pd.isna(ipos.loc[1, "offer_price"])  # a truly empty cell is still missing
+
+
+def test_reused_ticker_keeps_each_ipo_separate(tmp_path, monkeypatch):
+    # SNOW was Intrawest (2014) and later Snowflake (2020). Keyed by ticker
+    # alone, the 2020 prices overwrote the 2014 ones and both IPOs shared them.
+    monkeypatch.setattr(data, "NO_YAHOO_CSV", tmp_path / "none.csv")
+    ipos = pd.DataFrame({"ticker": ["SNOW", "SNOW"],
+                         "ipo_date": pd.to_datetime(["2014-01-31", "2020-09-16"])})
+    for when, open_price in [("2014-01-31", 14.0), ("2020-09-16", 245.0)]:
+        start, end = data.event_window(when)
+        prices = pd.DataFrame({c: [open_price] for c in data.PRICE_COLUMNS},
+                              index=pd.DatetimeIndex([when], name="Date"))
+        prices.to_csv(tmp_path / f"SNOW_{start}_{end}_prices.csv")
+        pd.Series([], name="ratio", index=pd.DatetimeIndex([], name="Date"), dtype=float).to_csv(
+            tmp_path / f"SNOW_{start}_{end}_splits.csv")
+
+    out = data.load_all_ipos(ipos, cache_dir=tmp_path)
+
+    assert out["SNOW 2014-01-31"][0]["Open"].iloc[0] == 14.0
+    assert out["SNOW 2020-09-16"][0]["Open"].iloc[0] == 245.0

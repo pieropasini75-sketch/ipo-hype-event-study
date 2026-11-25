@@ -1,6 +1,8 @@
 """Run the whole study and write tables and charts to results/.
 
-    python run_study.py
+    python run_study.py            # v1: the 47 hand-verified IPOs
+    python run_study.py v2         # v2: the expanded Nasdaq sample
+    python run_study.py anthropic  # prospective case: apply the fixed rule to Anthropic
 
 Steps: load the IPO list -> load cached prices (downloading what is missing)
 -> abnormal returns vs QQQ -> choose N* on train -> evaluate N* on test
@@ -30,7 +32,7 @@ SURFACE, TEXT, MUTED, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#e4e3df"
 def plot_abnormal_curve(panel, n_star: int, benchmark_name: str, path: Path) -> None:
     """Mean abnormal return by N: hype vs not hyped, train and test side by side."""
     curve = panel.groupby(["period", "group", "N"])["abnormal_return"].mean() * 100
-    counts = panel[panel["N"] == 0].groupby(["period", "group"])["ticker"].nunique()
+    counts = panel[panel["N"] == 0].groupby(["period", "group"])["ipo_id"].nunique()
 
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.5), sharey=True, facecolor=SURFACE)
     for ax, period, title in zip(axes, ["train", "test"], ["Train: 2010-2019", "Test: 2020+"]):
@@ -46,11 +48,9 @@ def plot_abnormal_curve(panel, n_star: int, benchmark_name: str, path: Path) -> 
             n_ipos = counts.get((period, group), 0)
             ax.plot(y.index, y.values, color=COLORS[group], linewidth=2,
                     label=f"{LABELS[group]} (n={n_ipos})")
-            ax.annotate(LABELS[group], (y.index[-1], y.values[-1]), xytext=(4, 0),
-                        textcoords="offset points", color=TEXT, fontsize=9, va="center")
         ax.set_title(title, color=TEXT, fontsize=11, loc="left")
         ax.set_xlabel("Trading days held (N)", color=MUTED)
-        ax.set_xlim(0, 22)
+        ax.set_xlim(0, 20)
         ax.set_xticks(range(0, 21, 5))  # N is a whole number of days
         ax.grid(axis="y", color=GRID, linewidth=0.8)
         ax.tick_params(colors=MUTED)
@@ -58,10 +58,44 @@ def plot_abnormal_curve(panel, n_star: int, benchmark_name: str, path: Path) -> 
             ax.spines[side].set_visible(False)
         for side in ["left", "bottom"]:
             ax.spines[side].set_color(GRID)
-        ax.legend(frameon=False, fontsize=9, labelcolor=TEXT, loc="upper right")
+        ax.legend(frameon=False, fontsize=9, labelcolor=TEXT, loc="best")
     axes[0].set_ylabel(f"Mean abnormal return vs {benchmark_name} (%)", color=MUTED)
     fig.suptitle("Buy at the first trade, sell at the day-N close (after 0.2% costs)",
                  color=TEXT, fontsize=12, x=0.01, ha="left")
+    fig.tight_layout()
+    fig.savefig(path, dpi=150, facecolor=SURFACE)
+    plt.close(fig)
+
+
+def plot_prospective(new, past, n_star: int, path: Path) -> None:
+    """A new IPO's abnormal curve against the hyped test-period IPOs (median and 10-90% band)."""
+    ref = analysis.curves(past, "hype", "test") * 100
+    lo, mid, hi = (ref.quantile(q) for q in (0.10, 0.50, 0.90))
+    fig, ax = plt.subplots(figsize=(8, 4.5), facecolor=SURFACE)
+    ax.set_facecolor(SURFACE)
+    ax.fill_between(mid.index, lo, hi, color=COLORS["hype"], alpha=0.15, linewidth=0,
+                    label=f"Hyped IPOs 2020+, 10th-90th percentile (n={len(ref)})")
+    ax.plot(mid.index, mid, color=COLORS["hype"], linewidth=2, label="Hyped IPOs 2020+, median")
+    for ticker, sub in new.groupby("ticker"):
+        ax.plot(sub["N"], sub["abnormal_return"] * 100, color=COLORS["no_hype"], linewidth=2.5,
+                marker="o", markersize=4, label=f"{ticker} (through {sub['date'].max():%Y-%m-%d})")
+    ax.axhline(0, color=MUTED, linewidth=1)
+    ax.axvline(n_star, color=MUTED, linewidth=1, linestyle="--")
+    ax.text(n_star + 0.3, 0.98, f"N* = {n_star}", transform=ax.get_xaxis_transform(),
+            color=MUTED, fontsize=9, va="top")
+    ax.set_xlim(0, 20)
+    ax.set_xticks(range(0, 21, 5))
+    ax.set_xlabel("Trading days held (N)", color=MUTED)
+    ax.set_ylabel("Abnormal return vs QQQ (%)", color=MUTED)
+    ax.set_title("Prospective case: the fixed rule applied to a new IPO", color=TEXT,
+                 fontsize=12, loc="left")
+    ax.grid(axis="y", color=GRID, linewidth=0.8)
+    ax.tick_params(colors=MUTED)
+    for side in ["top", "right"]:
+        ax.spines[side].set_visible(False)
+    for side in ["left", "bottom"]:
+        ax.spines[side].set_color(GRID)
+    ax.legend(frameon=False, fontsize=9, labelcolor=TEXT, loc="upper right")
     fig.tight_layout()
     fig.savefig(path, dpi=150, facecolor=SURFACE)
     plt.close(fig)
@@ -115,11 +149,12 @@ def report_robustness(benchmark, ipos, ipo_data, n_star: int) -> None:
 
 def report_coverage(ipos, ipo_data, ipo_table) -> None:
     """How many IPOs were lost and why, by year and by offer size (survivorship bias)."""
-    status = pd.Series("used", index=ipos["ticker"])
+    keys = [data.ipo_id(t, d) for t, d in zip(ipos["ticker"], ipos["ipo_date"])]
+    status = pd.Series("used", index=keys)
     status[~status.index.isin(ipo_data)] = "no Yahoo data"
-    status[status.index.isin(ipo_data) & ~status.index.isin(ipo_table["ticker"])] = "failed data checks"
+    status[status.index.isin(ipo_data) & ~status.index.isin(ipo_table["ipo_id"])] = "failed data checks"
     out = ipos.assign(
-        status=ipos["ticker"].map(status),
+        status=status.to_numpy(),
         year=ipos["ipo_date"].dt.year,
         size_class=(ipos["offer_size_usd"] >= analysis.HYPE_MIN_OFFER_SIZE_USD).map(
             {True: ">= US$500M", False: "< US$500M"}),
@@ -131,6 +166,20 @@ def report_coverage(ipos, ipo_data, ipo_table) -> None:
     by_size.to_csv(RESULTS_DIR / "coverage_by_size.csv")
     print("Coverage (survivorship bias) by offer size:")
     print(by_size.round(3).to_string(), "\n")
+
+
+def report_data_screen(benchmark, ipos, ipo_data, n_star: int) -> None:
+    """Robustness: the same N* without IPOs whose prices look inconsistently adjusted."""
+    panel, ipo_table = analysis.build_events(ipos, ipo_data, benchmark)
+    suspect = ipo_table[analysis.suspect_data(ipo_table)]
+    suspect.to_csv(RESULTS_DIR / "suspect_data.csv", index=False)
+    clean = panel[~panel["ipo_id"].isin(suspect["ipo_id"])]
+    table = analysis.at_n(analysis.summary_table(clean), n_star)
+    table.to_csv(RESULTS_DIR / "headline_qqq_screened.csv")
+    plot_abnormal_curve(clean, n_star, "QQQ", RESULTS_DIR / "abnormal_curve_qqq_screened.png")
+    print(f"--- At N* = {n_star}, vs QQQ, without {len(suspect)} IPOs with suspect prices ---")
+    print(suspect.groupby(["period", "group"]).size().to_string())
+    print(table.round(4).to_string(), "\n")
 
 
 def report_without_foreign(benchmark, ipos, ipo_data, n_star: int) -> None:
@@ -170,10 +219,55 @@ def main(sample: str = "v1") -> None:
         _, ipo_table = analysis.build_events(ipos, ipo_data, benchmarks["QQQ"])
         report_coverage(ipos, ipo_data, ipo_table)
         report_without_foreign(benchmarks["QQQ"], ipos, ipo_data, n_star)
+        report_data_screen(benchmarks["QQQ"], ipos, ipo_data, n_star)
     print(f"Tables and charts written to {RESULTS_DIR}")
+
+
+PROSPECTIVE_CSV = data.PROJECT_ROOT / "data" / "prospective.csv"
+
+
+def prospective(results_dir: Path = RESULTS_DIR) -> None:
+    """Apply the rule fixed on past IPOs to new ones (Anthropic), without changing anything.
+
+    Hype is decided by the same code as for the historical sample; N* and the
+    reference distribution are read from results already written by v1 / v2,
+    so nothing is re-chosen after seeing the new IPO.
+    """
+    ipos = data.load_ipos(PROSPECTIVE_CSV)
+    ipo_data = data.load_all_ipos(ipos)  # open windows are downloaded, never cached
+    benchmarks = data.load_benchmarks(ipos)
+    rows = []
+    for sample, folder in [("v1", results_dir), ("v2", results_dir / "v2")]:
+        if not (folder / "summary_by_n_qqq.csv").exists():
+            continue  # that sample has not been run yet
+        n_star = analysis.choose_best_n(pd.read_csv(folder / "summary_by_n_qqq.csv"))
+        for name in ["QQQ", "SPY"]:
+            panel, ipo_table = analysis.build_events(ipos, ipo_data, benchmarks[name])
+            past = pd.read_csv(folder / f"panel_{name.lower()}.csv", **data.TICKER_SAFE)
+            reference = past.loc[(past["group"] == "hype") & (past["period"] == "test")
+                                 & (past["N"] == n_star), "abnormal_return"]
+            for info in ipo_table.itertuples(index=False):
+                curve = panel[panel["ipo_id"] == info.ipo_id].set_index("N")["abnormal_return"]
+                rows.append({"ticker": info.ticker, "sample": sample, "benchmark": name,
+                             "group": info.group, "open_premium": info.open_premium,
+                             "offer_size_usd": info.offer_size_usd,
+                             **analysis.prospective_verdict(curve, n_star, reference)})
+    out = pd.DataFrame(rows)
+    out.to_csv(results_dir / "prospective.csv", index=False)
+    pd.set_option("display.width", 200)
+    print(out.round(4).to_string(index=False))
+    curves = analysis.build_events(ipos, ipo_data, benchmarks["QQQ"])[0]
+    curves.to_csv(results_dir / "prospective_curve_qqq.csv", index=False)
+    # The chart uses the largest sample that has been run (v2 if available).
+    folder = results_dir / "v2" if (results_dir / "v2" / "panel_qqq.csv").exists() else results_dir
+    past = pd.read_csv(folder / "panel_qqq.csv", **data.TICKER_SAFE)
+    n_star = analysis.choose_best_n(pd.read_csv(folder / "summary_by_n_qqq.csv"))
+    plot_prospective(curves, past, n_star, results_dir / "prospective_qqq.png")
+    print(f"\nWritten to {results_dir / 'prospective.csv'}")
 
 
 if __name__ == "__main__":
     import sys
 
-    main(sys.argv[1] if len(sys.argv) > 1 else "v1")
+    sample = sys.argv[1] if len(sys.argv) > 1 else "v1"
+    prospective() if sample == "anthropic" else main(sample)

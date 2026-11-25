@@ -65,12 +65,13 @@ def build_events(ipos: pd.DataFrame,
     """
     panel_parts, ipo_rows = [], []
     for row in ipos.itertuples(index=False):
-        if row.ticker not in ipo_data:
+        key = data.ipo_id(row.ticker, row.ipo_date)
+        if key not in ipo_data:
             continue  # dropped in data.load_all_ipos, already warned
         period = period_of(row.ipo_date)
         if period is None:
             continue
-        prices, splits = ipo_data[row.ticker]
+        prices, splits = ipo_data[key]
 
         day0 = events.find_day0(prices, row.ipo_date)
         missed = events.missed_trading_days(benchmark.index, row.ipo_date, day0)
@@ -90,13 +91,15 @@ def build_events(ipos: pd.DataFrame,
             group = "hype" if hyped else "no_hype"
 
         ev = ev.reset_index()  # N becomes a column
-        ev.insert(0, "ticker", row.ticker)
-        ev.insert(1, "group", group)
-        ev.insert(2, "period", period)
+        ev.insert(0, "ipo_id", key)
+        ev.insert(1, "ticker", row.ticker)
+        ev.insert(2, "group", group)
+        ev.insert(3, "period", period)
         panel_parts.append(ev)
 
         bench_closes = benchmark["Close"].reindex(pd.DatetimeIndex(ev["date"]))
         ipo_rows.append({
+            "ipo_id": key,
             "ticker": row.ticker,
             "group": group,
             "period": period,
@@ -106,12 +109,42 @@ def build_events(ipos: pd.DataFrame,
             "open_premium": day0_open / adjusted_offer - 1,
             "offer_size_usd": row.offer_size_usd,
             "n_days": len(ev),
+            "max_daily_move": max_daily_move(prices.loc[day0:, "Close"].iloc[: events.MAX_N + 1]),
             "day0_range": events.day0_range(prices, row.ipo_date),
             "vol_10d": events.annualized_volatility(prices.loc[day0:, "Close"]),
             "benchmark_vol_10d": events.annualized_volatility(bench_closes.reset_index(drop=True)),
         })
 
     return pd.concat(panel_parts, ignore_index=True), pd.DataFrame(ipo_rows)
+
+
+# --- Data-quality screen (robustness only) -------------------------------------
+# Added 2026-11-24 AFTER seeing the v2 extremes, so it is reported as a robustness
+# check and never replaces the main result. Small IPOs with later reverse splits or
+# ADS-ratio changes sometimes come back from Yahoo inconsistently adjusted:
+# Lexin (LX, 2017) shows a day-0 open 87% below its offer and then +1,364% in six days.
+
+SUSPECT_FACTOR = 3.0  # a factor of 3 between offer and open, or within one day
+
+
+def max_daily_move(closes: pd.Series) -> float:
+    """Largest close-to-close move in either direction, as a factor (>= 1)."""
+    ratio = (closes / closes.shift(1)).dropna()
+    if ratio.empty:
+        return 1.0
+    return float(np.maximum(ratio, 1 / ratio).max())
+
+
+def suspect_data(ipo_table: pd.DataFrame, factor: float = SUSPECT_FACTOR) -> pd.Series:
+    """True for IPOs whose prices look inconsistently split-adjusted.
+
+    Flags a day-0 open more than `factor` times away from the adjusted offer
+    price (either direction), or a single day in the window moving by more
+    than `factor`. Direct listings have no offer, so only the second test applies.
+    """
+    ratio = ipo_table["day0_open"] / ipo_table["adjusted_offer"]
+    bad_open = (ratio > factor) | (ratio < 1 / factor)  # NaN compares False
+    return bad_open | (ipo_table["max_daily_move"] > factor)
 
 
 # --- Statistics ---------------------------------------------------------------
@@ -172,7 +205,7 @@ def curves(panel: pd.DataFrame, group: str, period: str,
            column: str = "abnormal_return") -> pd.DataFrame:
     """One row per IPO, one column per N: each IPO's whole curve from day 0 to 20."""
     sub = panel[(panel["group"] == group) & (panel["period"] == period)]
-    return sub.pivot(index="ticker", columns="N", values=column)
+    return sub.pivot(index="ipo_id", columns="N", values=column)
 
 
 def t_by_column(x: np.ndarray) -> np.ndarray:
@@ -263,3 +296,34 @@ def average_of_k_risk(returns: pd.Series, ks=PORTFOLIO_SIZES,
         averages = rng.choice(x, size=(n_resamples, k), replace=True).mean(axis=1)
         rows.append({"k": k, **risk_profile(averages)})
     return pd.DataFrame(rows).drop(columns="n")
+
+
+# --- Prospective case (Anthropic) ---------------------------------------------
+
+def prospective_verdict(curve: pd.Series, n_star: int, reference: pd.Series) -> dict:
+    """Compare one new IPO with what the study predicted, without re-fitting anything.
+
+    curve     : the new IPO's abnormal return by N (index = N), as far as data exists.
+    n_star    : the holding period chosen on the training period, never re-chosen.
+    reference : abnormal returns at n_star of hyped test-period IPOs, the
+                distribution the study would have used to decide on the trade.
+
+    While fewer than n_star + 1 days have traded the verdict is 'pending' and
+    only the latest available N is reported: nothing is extrapolated.
+    """
+    ref = reference.dropna().to_numpy(float)
+    last_n = int(curve.index.max())
+    done = n_star in curve.index
+    value = float(curve.loc[n_star]) if done else math.nan
+    return {
+        "status": "final" if done else f"pending ({last_n + 1} of {n_star + 1} days traded)",
+        "n_star": n_star,
+        "abnormal_at_n_star": value,
+        "last_n": last_n,
+        "abnormal_at_last_n": float(curve.loc[last_n]),
+        # Share of reference IPOs that did worse; NaN until N* is reached.
+        "percentile_in_reference": float((ref < value).mean()) if done else math.nan,
+        "reference_n": len(ref),
+        "reference_median": float(np.median(ref)),
+        "reference_share_beat_market": float((ref > 0).mean()),
+    }

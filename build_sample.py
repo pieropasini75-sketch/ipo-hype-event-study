@@ -218,10 +218,11 @@ def download_prices() -> None:
     expanded = data.load_ipos(EXPANDED_CSV)
     done = set()
     if data.NO_YAHOO_CSV.exists():
-        done = set(pd.read_csv(data.NO_YAHOO_CSV)["ticker"])
+        known = pd.read_csv(data.NO_YAHOO_CSV, **data.TICKER_SAFE)
+        done = {data.ipo_id(t, d) for t, d in zip(known["ticker"], known["ipo_date"])}
     missing = []
     for i, row in enumerate(expanded.itertuples(index=False), start=1):
-        if row.ticker in done:
+        if data.ipo_id(row.ticker, row.ipo_date) in done:
             continue
         start, end = data.event_window(row.ipo_date)
         for attempt in range(5):
@@ -242,8 +243,9 @@ def download_prices() -> None:
             print(f"[{i}/{len(expanded)}] {len(missing)} without Yahoo data so far", flush=True)
 
     if missing:
-        old = pd.read_csv(data.NO_YAHOO_CSV) if data.NO_YAHOO_CSV.exists() else pd.DataFrame()
-        pd.concat([old, pd.DataFrame(missing)]).drop_duplicates("ticker").to_csv(
+        old = pd.read_csv(data.NO_YAHOO_CSV, **data.TICKER_SAFE) if data.NO_YAHOO_CSV.exists() else pd.DataFrame()
+        pd.concat([old, pd.DataFrame(missing)]).dropna(subset=["ticker"]).drop_duplicates(
+            ["ticker", "ipo_date"]).to_csv(
             data.NO_YAHOO_CSV, index=False)
     print(f"Done. {len(missing)} new tickers without Yahoo data (listed in {data.NO_YAHOO_CSV.name})")
 

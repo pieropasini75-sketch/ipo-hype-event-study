@@ -27,7 +27,7 @@ COPY pyproject.toml ./
 COPY src ./src
 RUN pip install --no-cache-dir -e .
 
-COPY data/ipos.csv data/ipos_expanded.csv data/excluded.csv ./data/
+COPY data/ipos.csv data/ipos_expanded.csv data/excluded.csv data/prospective.csv data/no_yahoo_data.csv ./data/
 COPY run_study.py build_sample.py ./
 COPY tests ./tests
 

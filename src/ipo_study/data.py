@@ -27,12 +27,16 @@ DAYS_AFTER = 90  # calendar days after the IPO date; comfortably covers 20 tradi
 BENCHMARKS = ("QQQ", "SPY")
 PRICE_COLUMNS = ["Open", "High", "Low", "Close", "Adj Close", "Volume"]
 
+# Only an empty cell is missing. By default pandas also reads the text "NA" as
+# missing, which silently turned Nano Labs' ticker NA into NaN.
+TICKER_SAFE = {"keep_default_na": False, "na_values": [""]}
+
 
 # --- IPO list -----------------------------------------------------------------
 
 def load_ipos(path: Path = IPOS_CSV) -> pd.DataFrame:
     """Read the IPO list and check that offer_size_usd = offer_price * shares_offered."""
-    ipos = pd.read_csv(path, parse_dates=["ipo_date"])
+    ipos = pd.read_csv(path, parse_dates=["ipo_date"], **TICKER_SAFE)
     implied = ipos["offer_price"] * ipos["shares_offered"]
     # Direct listings have NaN in both columns; NaN > 1 is False, so they pass.
     mismatch = (ipos["offer_size_usd"] - implied).abs() > 1
@@ -40,6 +44,13 @@ def load_ipos(path: Path = IPOS_CSV) -> pd.DataFrame:
         bad = ipos.loc[mismatch, "ticker"].tolist()
         raise ValueError(f"offer_size_usd != offer_price * shares_offered for {bad}")
     return ipos
+
+
+def ipo_id(ticker: str, ipo_date) -> str:
+    """Unique key for one IPO. A ticker alone is not enough: tickers get reused
+    (SNOW was Intrawest in 2014 and Snowflake in 2020), and keying by ticker
+    would let the later IPO's prices overwrite the earlier one's."""
+    return f"{ticker} {pd.Timestamp(ipo_date):%Y-%m-%d}"
 
 
 def event_window(ipo_date) -> tuple[date, date]:
@@ -169,22 +180,32 @@ def has_prices_before(prices: pd.DataFrame, ipo_date) -> bool:
 
 def load_all_ipos(ipos: pd.DataFrame, cache_dir: Path = PRICES_DIR,
                   refresh: bool = False) -> dict[str, tuple[pd.DataFrame, pd.Series]]:
-    """Prices and splits for every IPO, dropping (with a warning) the ones that fail checks."""
+    """Prices and splits for every IPO, keyed by ipo_id, dropping (with a warning) the ones
+    that fail checks."""
     out = {}
-    skip = set(pd.read_csv(NO_YAHOO_CSV)["ticker"]) if NO_YAHOO_CSV.exists() else set()
+    skip = set()
+    if NO_YAHOO_CSV.exists():
+        known = pd.read_csv(NO_YAHOO_CSV, **TICKER_SAFE)
+        skip = {ipo_id(t, d) for t, d in zip(known["ticker"], known["ipo_date"])}
     for row in ipos.itertuples(index=False):
-        if row.ticker in skip:
+        key = ipo_id(row.ticker, row.ipo_date)
+        if key in skip:
             continue  # known to have no Yahoo data; counted as survivorship bias
         start, end = event_window(row.ipo_date)
         prices, splits = get_ticker_data(row.ticker, start, end, cache_dir, refresh)
         if prices.empty:
             continue  # get_ticker_data already warned
         prices = drop_non_trading_bars(prices)
+        if prices.empty:
+            # Only zero-volume placeholder bars (HIVE 2014: the ticker now belongs to
+            # another company and Yahoo fills the old window with flat, untraded bars).
+            warnings.warn(f"{row.ticker}: no traded bars around {row.ipo_date.date()}; dropped")
+            continue
         if has_prices_before(prices, row.ipo_date):
             warnings.warn(f"{row.ticker}: prices exist before the IPO date "
                           f"{row.ipo_date.date()}; wrong ticker or date, dropped")
             continue
-        out[row.ticker] = (prices, splits)
+        out[key] = (prices, splits)
     return out
 
 
